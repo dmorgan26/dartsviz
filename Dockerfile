@@ -15,8 +15,8 @@ RUN apt-get update -y && \
 #install devtools
 ###########
 
-RUN R -e "install.packages('devtools')"
-RUN R -e "devtools::install_github('dmorgan26/dartsviz', build_vignettes = TRUE)"
+RUN R -e "install.packages('remotes')"
+RUN R -e "remotes::install_github('dmorgan26/dartsviz/plot-app', build_vignettes = TRUE)"
 
 ################
 # configure shiny server
