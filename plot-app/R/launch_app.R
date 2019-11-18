@@ -86,19 +86,29 @@ launch_app <- function() {
 
     ## write reactive functions that generate the datasets
 
+    ##** Tab 1 **##
+
+    ## subsets darts_to_win_leg_dataset to extract the selected players
     leg_completion_data <- reactive({subset(darts_to_win_leg_dataset, name == input$p1_input_tab1 | name == input$p2_input_tab1)})
 
+    ## Generate a vector of values for each player
+    ## The values are the number of darts needed to win each leg that the player won in the dataset
     t_test_vec1 <- reactive({darts_to_win_leg_dataset$darts_thrown[darts_to_win_leg_dataset$name == input$p1_input_tab1]})
     t_test_vec2 <- reactive({darts_to_win_leg_dataset$darts_thrown[darts_to_win_leg_dataset$name == input$p2_input_tab1]})
 
+    ## run a students t-test on the vectors to test for equality of means
     t_test_result <- reactive({t.test(darts_to_win_leg_dataset$darts_thrown[darts_to_win_leg_dataset$name == input$p1_input_tab1]
                                       , darts_to_win_leg_dataset$darts_thrown[darts_to_win_leg_dataset$name == input$p2_input_tab1])})
 
-
+    ## create a vector of the sample standard deviations
     sample_standard_deviations <- reactive({c(sd(darts_to_win_leg_dataset$darts_thrown[darts_to_win_leg_dataset$name == input$p1_input_tab1])
                                               , sd(darts_to_win_leg_dataset$darts_thrown[darts_to_win_leg_dataset$name == input$p2_input_tab1]))})
 
+    ##** Tab 3 **##
 
+    ## for the selected player, generate 1000 sample means for samples of size 50 in each scenario (pressure and none)
+    ## using the under pressure and no pressure conversion rate
+    ## this allows us to plot the sampling distribution of the sample means
     sampling_distribution_of_sample_means <- reactive({
 
       pressure_no_sample <- vector()
@@ -106,7 +116,7 @@ launch_app <- function() {
 
       for (i in 1:1000) {
 
-        pressure_no_sample[i] <- mean(base::sample(x = pressure_effect_dataset[pressure_effect_dataset$name == input$p1_input_tab3 & pressure_effect_dataset$is_pressure == 0, 3, drop=TRUE]
+        pressure_no_sample[i] <- mean(base::sample(x = pressure_effect_dataset[pressure_effect_dataset$name == input$p1_input_tab3 & pressure_effect_dataset$is_pressure == 0, 3, drop = TRUE]
                                                    ,size = 50
                                                    ,replace = TRUE))
 
@@ -116,7 +126,10 @@ launch_app <- function() {
 
       }
 
+      ## bind the two vectors of sample means into a data frame
       long_pressure_df <- data.frame(no = pressure_no_sample, yes = pressure_yes_sample) %>%
+
+        ## pivot to result in frequency table of mean conversion by pressure and no
         gather(key = pressure_applied, value = sampled_mean_conversion) %>%
         group_by(pressure_applied, sampled_mean_conversion) %>%
         tally()
@@ -125,14 +138,17 @@ launch_app <- function() {
       long_pressure_df
     })
 
+    ## now that the sample means have been represented as a discrete distribution, chi-squared test can be used to test for the likelihood
+    ## that the differences between the two sets of data (pressure and no) arose by chance
     chisq_test_result <- reactive({
 
+      ## join the tables for pressure and no,
         chisq_df <- sampling_distribution_of_sample_means()[sampling_distribution_of_sample_means()$pressure_applied == "no",] %>%
                       inner_join(sampling_distribution_of_sample_means()[sampling_distribution_of_sample_means()$pressure_applied == "yes",]
                                                                                                   ,by = "sampled_mean_conversion")
 
           chisq_df2 <- chisq_df[,c(3,5)]
-
+        ## perform chi-sq test abd produce p-value to accept/reject the null that pressure and no affect on conversion rate
           suppressWarnings({chisq.test(chisq_df2)$p.value})
 
                               })
@@ -141,8 +157,8 @@ launch_app <- function() {
     output$plot_tab1 <- renderPlot({
 
       mean_darts_thrown_df <- leg_completion_data() %>%
-        group_by(name) %>%
-        summarise(mean_darts = mean(darts_thrown))
+                              group_by(name) %>%
+                              summarise(mean_darts = mean(darts_thrown))
 
       ggplot(leg_completion_data(), aes(x = darts_thrown, fill = name)) +
         ggtitle(paste(input$p1_input_tab1, "vs. ", input$p2_input_tab1, " - Head to Head Mean Darts Thrown Probability Density Function")) +
@@ -185,11 +201,12 @@ launch_app <- function() {
 
     output$plot_tab3 <- renderPlot({
 
+      ## calcualte the mean conversion with and without pressure so that they can be plotted on the chart by geom_vline()
       game_state_means <-  sampling_distribution_of_sample_means() %>%
         group_by(pressure_applied) %>%
         summarise(mean_conversion = mean(sampled_mean_conversion))
 
-
+      ## plot sampling distribution of the sample means
       ggplot(sampling_distribution_of_sample_means(), aes(x = sampled_mean_conversion, y = n ,fill=pressure_applied)) +
         ggtitle(paste(input$p1_input_tab3, " - Sampling Distribution of Sample Means - Double Conversion by Game State")) +
         theme(plot.title = element_text(size = 18)) +
@@ -214,9 +231,3 @@ launch_app <- function() {
 
 }
 
-#
-# load_data_to_global_envir()
-# create_darts_to_complete_leg_dataset()
-# create_double_success_per_match_dataset()
-# create_pressure_effect_dataset()
-# launch_app()
